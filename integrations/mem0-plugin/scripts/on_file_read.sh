@@ -16,7 +16,7 @@ set -uo pipefail
 INPUT=$(cat)
 
 # Extract file path from tool_input
-FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null || echo "")
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.filePath // .tool_input.path // ""' 2>/dev/null || echo "")
 if [ -z "$FILE_PATH" ]; then
   exit 0
 fi

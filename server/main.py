@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from rate_limit import limiter
 from routers import api_keys as api_keys_router
 from routers import auth as auth_router
+from routers import cli_compat as cli_compat_router
 from routers import entities as entities_router
 from routers import requests as requests_router
 from schemas import MessageResponse
@@ -58,7 +59,7 @@ SKIPPED_REQUEST_LOG_PATHS = {"/api/health", "/docs", "/redoc", "/openapi.json"}
 SKIPPED_REQUEST_LOG_PREFIXES = ("/requests",)
 
 BUNDLED_LLM_PROVIDERS = ("openai", "anthropic", "gemini")
-BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini")
+BUNDLED_EMBEDDER_PROVIDERS = ("openai", "gemini", "ollama")
 
 
 def _warn_if_unconfigured() -> None:
@@ -111,9 +112,14 @@ POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "postgres")
 POSTGRES_COLLECTION_NAME = os.environ.get("POSTGRES_COLLECTION_NAME", "memories")
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 HISTORY_DB_PATH = os.environ.get("HISTORY_DB_PATH", "/app/history/history.db")
-DEFAULT_LLM_MODEL = os.environ.get("MEM0_DEFAULT_LLM_MODEL", "gpt-4.1-nano-2025-04-14")
-DEFAULT_EMBEDDER_MODEL = os.environ.get("MEM0_DEFAULT_EMBEDDER_MODEL", "text-embedding-3-small")
+DEFAULT_LLM_MODEL = os.environ.get("MEM0_DEFAULT_LLM_MODEL", "deepseek-v4-pro")
+DEFAULT_EMBEDDER_MODEL = os.environ.get("MEM0_DEFAULT_EMBEDDER_MODEL", "nomic-embed-text")
+
+_llm_api_key = DEEPSEEK_API_KEY or OPENAI_API_KEY
 
 DEFAULT_CONFIG = {
     "version": "v1.1",
@@ -126,13 +132,26 @@ DEFAULT_CONFIG = {
             "user": POSTGRES_USER,
             "password": POSTGRES_PASSWORD,
             "collection_name": POSTGRES_COLLECTION_NAME,
+            "embedding_model_dims": 768,
         },
     },
     "llm": {
         "provider": "openai",
-        "config": {"api_key": OPENAI_API_KEY, "temperature": 0.2, "model": DEFAULT_LLM_MODEL},
+        "config": {
+            "api_key": _llm_api_key,
+            "openai_base_url": DEEPSEEK_BASE_URL,
+            "temperature": 0.2,
+            "model": DEFAULT_LLM_MODEL,
+        },
     },
-    "embedder": {"provider": "openai", "config": {"api_key": OPENAI_API_KEY, "model": DEFAULT_EMBEDDER_MODEL}},
+    "embedder": {
+        "provider": "ollama",
+        "config": {
+            "model": DEFAULT_EMBEDDER_MODEL,
+            "ollama_base_url": OLLAMA_BASE_URL,
+            "embedding_dims": 768,
+        },
+    },
     "history_db_path": HISTORY_DB_PATH,
 }
 
@@ -167,6 +186,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(api_keys_router.router)
 app.include_router(entities_router.router)
+app.include_router(cli_compat_router.router)
 app.include_router(requests_router.router)
 
 

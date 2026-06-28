@@ -141,16 +141,31 @@ def _resolve_user_from_api_key(key: str, db: Session) -> User:
     raise HTTPException(status_code=401, detail="Invalid API key.")
 
 
+def _extract_token_api_key(request: Request) -> str | None:
+    auth = request.headers.get("Authorization")
+    if auth and auth.startswith("Token "):
+        return auth[6:].strip()
+    return None
+
+
 async def verify_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     x_api_key: str | None = Depends(api_key_header),
     db: Session = Depends(get_db),
 ) -> User | None:
-    """Authenticate via JWT, X-API-Key, or legacy ADMIN_API_KEY. Returns User or None."""
+    """Authenticate via JWT, Token API key, X-API-Key, or legacy ADMIN_API_KEY. Returns User or None."""
     if credentials is not None:
         _mark_auth_type(request, "bearer")
         return _resolve_user_from_jwt(credentials.credentials, db)
+
+    token_key = _extract_token_api_key(request)
+    if token_key is not None:
+        if ADMIN_API_KEY and secrets.compare_digest(token_key, ADMIN_API_KEY):
+            _mark_auth_type(request, "admin_api_key")
+            return None
+        _mark_auth_type(request, "api_key")
+        return _resolve_user_from_api_key(token_key, db)
 
     if x_api_key is not None:
         if ADMIN_API_KEY and secrets.compare_digest(x_api_key, ADMIN_API_KEY):
